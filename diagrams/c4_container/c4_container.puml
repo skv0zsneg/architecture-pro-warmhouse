@@ -1,0 +1,70 @@
+@startuml c4_container
+!include <C4/C4_Container>
+
+title Тёплый дом — целевая архитектура (To-Be)\nC4: диаграмма контейнеров
+
+LAYOUT_TOP_DOWN()
+
+Person(user, "Пользователь", "Владелец или участник дома.")
+System_Ext(modules, "Устройства партнёров", "Датчики, реле, контроллеры ворот.")
+System_Ext(cameras, "Камеры партнёров", "Управление и видеопоток.")
+
+System_Boundary(mainSystem, "Тёплый дом — SaaS-платформа") {
+    Container(spa, "Веб-приложение", "TypeScript, React", "Устройства, сценарии, показания и камеры.")
+    Container(gateway, "API Gateway", "NGINX", "Единая точка входа и маршрутизация API.")
+
+    Container(identity, "Пользователи и доступ", "Go, Gin", "Пользователи, права и модуль подписок.")
+    Container(devices, "Управление устройствами", "Python, FastAPI", "Дома, устройства, адаптеры протоколов и модуль автоматизации.")
+    Container(heating, "Управление отоплением", "Go, Gin", "Команды и состояние отопления.")
+    Container(lighting, "Управление освещением", "Go, Gin", "Команды и состояние освещения.")
+    Container(gates, "Управление воротами", "Go, Gin", "Команды и состояние ворот.")
+    Container(video, "Видеонаблюдение", "Go, встроенный медиашлюз", "Камеры и сеансы просмотра.")
+    Container(telemetry, "Телеметрия", "Python, FastAPI", "Сбор показаний, история и последние значения.")
+    ContainerQueue(events, "Брокер событий", "RabbitMQ", "Показания и изменения состояния устройств.")
+
+    ContainerDb(identityDb, "БД пользователей и доступа", "PostgreSQL", "Пользователи, права, подписки.")
+    ContainerDb(devicesDb, "БД устройств и сценариев", "PostgreSQL", "Дома, устройства, правила.")
+    ContainerDb(heatingDb, "БД отопления", "PostgreSQL", "Настройки, команды, состояние.")
+    ContainerDb(lightingDb, "БД освещения", "PostgreSQL", "Настройки, команды, состояние.")
+    ContainerDb(gatesDb, "БД ворот", "PostgreSQL", "Настройки, команды, состояние.")
+    ContainerDb(videoDb, "БД видеонаблюдения", "PostgreSQL", "Камеры и сеансы.")
+    ContainerDb(telemetryDb, "БД телеметрии", "PostgreSQL, TimescaleDB", "Измерения и события.")
+}
+
+Rel_D(user, spa, "Работает с системой", "HTTPS")
+Rel_D(spa, gateway, "Вызывает API", "HTTPS, REST/JSON")
+
+Rel(gateway, identity, "Доступ и подписки", "HTTPS, REST/JSON")
+Rel(gateway, devices, "Дома, устройства и сценарии", "HTTPS, REST/JSON")
+Rel(gateway, heating, "Управление отоплением", "HTTPS, REST/JSON")
+Rel(gateway, lighting, "Управление освещением", "HTTPS, REST/JSON")
+Rel(gateway, gates, "Управление воротами", "HTTPS, REST/JSON")
+Rel(gateway, video, "Камеры и просмотр", "HTTPS, REST/JSON")
+Rel(gateway, telemetry, "Показания и история", "HTTPS, REST/JSON")
+
+BiRel(heating, devices, "Команды устройств / действия сценариев", "HTTPS, REST/JSON")
+BiRel(lighting, devices, "Команды устройств / действия сценариев", "HTTPS, REST/JSON")
+BiRel(gates, devices, "Команды устройств / действия сценариев", "HTTPS, REST/JSON")
+BiRel(video, devices, "Параметры камер / действия сценариев", "HTTPS, REST/JSON")
+
+BiRel(devices, modules, "Команды / показания и состояния", "HTTPS")
+Rel(video, cameras, "Управление и получение потока", "ONVIF/HTTPS, RTSP/RTP")
+Rel(video, spa, "Видеопоток", "WebRTC")
+
+BiRel(devices, events, "Публикация событий / триггеры сценариев", "AMQP")
+Rel(video, events, "События камер", "AMQP")
+Rel(events, telemetry, "Показания и события", "AMQP")
+Rel(events, heating, "Состояния отопления", "AMQP")
+Rel(events, lighting, "Состояния освещения", "AMQP")
+Rel(events, gates, "Состояния ворот", "AMQP")
+
+Rel(identity, identityDb, "Читает и записывает", "SQL/TLS")
+Rel(devices, devicesDb, "Читает и записывает", "SQL/TLS")
+Rel(heating, heatingDb, "Читает и записывает", "SQL/TLS")
+Rel(lighting, lightingDb, "Читает и записывает", "SQL/TLS")
+Rel(gates, gatesDb, "Читает и записывает", "SQL/TLS")
+Rel(video, videoDb, "Читает и записывает", "SQL/TLS")
+Rel(telemetry, telemetryDb, "Читает и записывает", "SQL/TLS")
+
+SHOW_LEGEND()
+@enduml

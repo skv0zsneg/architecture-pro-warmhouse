@@ -1,0 +1,181 @@
+@startuml er
+title Тёплый дом — логическая ER-модель целевой системы
+hide circle
+skinparam linetype ortho
+skinparam shadowing false
+
+package "Пользователи, доступ и подписки" {
+  entity "User" as users {
+    * id : bigint <<PK>>
+    --
+    * email : varchar <<UNIQUE>>
+    * password_hash : text
+    * created_at : timestamptz
+  }
+  entity "Membership" as membership {
+    * user_id : bigint <<PK, FK>>
+    * home_id : bigint <<PK, reference>>
+    --
+    * role : varchar
+  }
+  entity "Plan" as plan {
+    * id : varchar <<PK>>
+    --
+    * name : varchar
+    * features : jsonb
+  }
+  entity "Subscription" as subscription {
+    * id : uuid <<PK>>
+    --
+    * home_id : bigint <<reference>>
+    * plan_id : varchar <<FK>>
+    * status : varchar
+    * valid_until : timestamptz
+  }
+}
+
+package "Устройства и автоматизация" {
+  entity "Home" as home {
+    * id : bigint <<PK>>
+    --
+    * name : varchar
+    * owner_user_id : bigint <<reference>>
+  }
+  entity "Room" as room {
+    * id : bigint <<PK>>
+    --
+    * home_id : bigint <<FK>>
+    * name : varchar
+  }
+  entity "Device" as device {
+    * id : bigint <<PK>>
+    --
+    * home_id : bigint <<FK>>
+    room_id : bigint <<FK>>
+    module_id : bigint <<FK>>
+    * type_id : bigint <<FK>>
+    * name : varchar
+    * serial_number : varchar
+    * protocol : varchar
+    * capabilities : jsonb
+    * status : varchar
+    * created_at : timestamptz
+  }
+  entity "DeviceType" as deviceType {
+    * id : bigint <<PK>>
+    --
+    * code : varchar <<UNIQUE>>
+    * manufacturer : varchar
+    * model : varchar
+    * supported_protocols : jsonb
+  }
+  entity "Module (комплект)" as module {
+    * id : bigint <<PK>>
+    --
+    * home_id : bigint <<FK>>
+    * name : varchar
+    * manufacturer : varchar
+    * serial_number : varchar
+  }
+  entity "DeviceConfiguration" as config {
+    * device_id : bigint <<PK, FK>>
+    --
+    * endpoint : text
+    * parameters : jsonb
+  }
+  entity "Scenario" as scenario {
+    * id : uuid <<PK>>
+    --
+    * home_id : bigint <<FK>>
+    * created_by : bigint <<reference>>
+    * name : varchar
+    * enabled : boolean
+    * trigger : jsonb
+  }
+  entity "ScenarioAction" as action {
+    * scenario_id : uuid <<PK, FK>>
+    * position : integer <<PK>>
+    --
+    * device_id : bigint <<FK>>
+    * operation : varchar
+    * parameters : jsonb
+  }
+}
+
+package "Телеметрия" {
+  entity "Measurement" as measurement {
+    * id : uuid <<PK>>
+    --
+    * device_id : bigint <<reference>>
+    * home_id : bigint <<reference>>
+    * observed_at : timestamptz
+    * metric : varchar
+    * value : double
+    * unit : varchar
+    * status : varchar
+  }
+}
+
+package "Отопление / освещение / ворота\n(собственные таблицы в каждом сервисе)" {
+  entity "Command" as command {
+    * id : uuid <<PK, idempotency key>>
+    --
+    * device_id : bigint <<reference>>
+    * requested_by : bigint <<reference>>
+    * operation : varchar
+    * status : varchar
+    * created_at : timestamptz
+    completed_at : timestamptz
+  }
+  entity "ActuatorState" as state {
+    * device_id : bigint <<PK, reference>>
+    --
+    * value : jsonb
+    * version : bigint
+    * observed_at : timestamptz
+  }
+}
+
+package "Видеонаблюдение" {
+  entity "CameraConfiguration" as camera {
+    * device_id : bigint <<PK, reference>>
+    --
+    * stream_uri : text
+    * protocol : varchar
+    * enabled : boolean
+  }
+  entity "ViewingSession" as session {
+    * id : uuid <<PK>>
+    --
+    * device_id : bigint <<FK>>
+    * user_id : bigint <<reference>>
+    * status : varchar
+    * expires_at : timestamptz
+  }
+}
+
+users ||--o{ membership
+users ||..o{ home : владеет
+home ||..o{ membership
+home ||..o{ subscription
+plan ||--o{ subscription
+home ||--o{ room
+home ||--o{ device
+home ||--o{ module
+module |o--o{ device
+deviceType ||--o{ device
+room |o--o{ device
+device ||--o| config
+home ||--o{ scenario
+users ||..o{ scenario
+scenario ||--|{ action
+device ||--o{ action
+device ||..o{ measurement
+home ||..o{ measurement
+device ||..o{ command
+users ||..o{ command
+device ||..o| state
+device ||..o| camera
+camera ||--o{ session
+users ||..o{ session
+@enduml

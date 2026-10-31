@@ -1,0 +1,26 @@
+@startuml lighting
+!include <C4/C4_Component>
+title Тёплый дом — управление освещением (To-Be)
+LAYOUT_TOP_DOWN()
+
+Container_Ext(client, "API Gateway / автоматизация", "HTTPS", "Команды освещения и чтение состояния.")
+Container_Ext(devices, "Управление устройствами", "Python", "Возможности и доставка команд оборудованию.")
+ContainerQueue(events, "Брокер событий", "RabbitMQ", "Подтверждения состояний.")
+Container_Boundary(service, "Управление освещением") {
+    Component(api, "LightingController", "Go, Gin", "REST API команд и состояния. Проверка доступа.")
+    Component(commands, "LightingService", "Go", "Включить / выключить. Проверка возможностей и учёт команд.")
+    Component(deviceClient, "DeviceClient", "Go, HTTP", "Передача команды и её идентификатора сервису устройств.")
+    Component(consumer, "LightingStateConsumer", "Go, AMQP", "Идемпотентное применение подтверждённых состояний.")
+    Component(repository, "LightingRepository", "Go, SQL", "Команды и последнее подтверждённое состояние.")
+}
+ContainerDb(db, "БД освещения", "PostgreSQL", "Настройки, команды и состояние.")
+
+Rel(client, api, "Команды / состояние", "HTTPS, REST/JSON")
+Rel(api, commands, "Вызывает")
+Rel(commands, deviceClient, "Передаёт команду")
+Rel(deviceClient, devices, "Запрашивает возможности / отправляет команду", "HTTPS, REST/JSON")
+Rel(commands, repository, "Сохраняет команду / читает состояние")
+Rel(events, consumer, "Состояние освещения", "AMQP")
+Rel(consumer, repository, "Обновляет состояние и результат команды")
+Rel(repository, db, "Читает и записывает", "SQL")
+@enduml

@@ -1,0 +1,25 @@
+@startuml identity
+!include <C4/C4_Component>
+title Тёплый дом — пользователи и доступ (To-Be)
+LAYOUT_TOP_DOWN()
+
+Container_Ext(client, "API Gateway / backend-сервисы", "HTTPS", "Вход, права и доступность функций.")
+Container_Boundary(service, "Пользователи и доступ") {
+    Component(api, "IdentityController", "Go, Gin", "REST API пользователей, входа и проверки доступа.")
+    Component(auth, "AuthenticationService", "Go", "Проверка пароля, выпуск JWT и публикация ключей.")
+    Component(access, "AccessService", "Go", "Членство в доме, роли и права на ресурсы.")
+    Component(subscriptions, "SubscriptionService", "Go", "Внутренний модуль подписок и доступных функций.")
+    Component(repository, "IdentityRepository", "Go, SQL", "Пользователи, членство, тарифы и подписки.")
+}
+ContainerDb(db, "БД пользователей и доступа", "PostgreSQL", "Данные контекста доступа и модуля подписок.")
+
+Rel(client, api, "Вход / проверка доступа", "HTTPS, REST/JSON")
+Rel(api, auth, "Аутентифицирует")
+Rel(api, access, "Проверяет права")
+Rel(api, subscriptions, "Управляет подписками")
+Rel(access, subscriptions, "Проверяет доступность функции")
+Rel(auth, repository, "Находит пользователя")
+Rel(access, repository, "Читает членство и роли")
+Rel(subscriptions, repository, "Читает и сохраняет")
+Rel(repository, db, "Читает и записывает", "SQL")
+@enduml

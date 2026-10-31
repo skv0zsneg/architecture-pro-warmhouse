@@ -1,0 +1,32 @@
+@startuml video
+!include <C4/C4_Component>
+title Тёплый дом — видеонаблюдение (To-Be)
+LAYOUT_TOP_DOWN()
+
+Container_Ext(client, "API Gateway / автоматизация", "HTTPS", "Камеры и управление просмотром.")
+Container_Ext(devices, "Управление устройствами", "Python", "Реестр и параметры камер.")
+Container_Ext(spa, "Веб-приложение", "React", "Просмотр видео.")
+System_Ext(cameras, "Камеры партнёров", "Управление и медиапоток.")
+ContainerQueue(events, "Брокер событий", "RabbitMQ", "Состояния камер и сеансов.")
+Container_Boundary(service, "Видеонаблюдение") {
+    Component(api, "VideoController", "Go, HTTP", "API камер и сеансов. Проверка доступа.")
+    Component(sessions, "ViewingSessionService", "Go", "Создаёт и завершает ограниченные по времени сеансы.")
+    Component(deviceClient, "DeviceClient", "Go, HTTP", "Получает параметры зарегистрированной камеры.")
+    Component(media, "MediaGateway", "Медиабиблиотека", "ONVIF-управление и преобразование RTSP в WebRTC.")
+    Component(publisher, "VideoEventPublisher", "Go, AMQP", "События состояния камер и просмотра.")
+    Component(repository, "VideoRepository", "Go, SQL", "Настройки камер и сеансы.")
+}
+ContainerDb(db, "БД видеонаблюдения", "PostgreSQL", "Камеры и сеансы.")
+
+Rel(client, api, "Управляет просмотром", "HTTPS, REST/JSON")
+Rel(api, sessions, "Создаёт / завершает сеанс")
+Rel(sessions, deviceClient, "Запрашивает камеру")
+Rel(deviceClient, devices, "Читает параметры", "HTTPS, REST/JSON")
+Rel(sessions, media, "Открывает / закрывает поток")
+Rel(media, cameras, "Управляет и получает поток", "ONVIF/HTTPS, RTSP/RTP")
+Rel(media, spa, "Передаёт поток авторизованного сеанса", "WebRTC")
+Rel(sessions, repository, "Читает и сохраняет")
+Rel(sessions, publisher, "Публикует изменения")
+Rel(publisher, events, "События камер и сеансов", "AMQP")
+Rel(repository, db, "Читает и записывает", "SQL")
+@enduml
