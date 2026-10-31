@@ -2,26 +2,36 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 
-	"smarthome/db"
 	"smarthome/models"
 	"smarthome/services"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
+
+type SensorRepository interface {
+	GetSensors(context.Context) ([]models.Sensor, error)
+	GetSensorByID(context.Context, int) (models.Sensor, error)
+	CreateSensor(context.Context, models.SensorCreate) (models.Sensor, error)
+	UpdateSensor(context.Context, int, models.SensorUpdate) (models.Sensor, error)
+	DeleteSensor(context.Context, int) error
+	UpdateSensorValue(context.Context, int, float64, string) error
+}
 
 // SensorHandler handles sensor-related requests
 type SensorHandler struct {
-	DB                 *db.DB
+	DB                 SensorRepository
 	TemperatureService *services.TemperatureService
 }
 
 // NewSensorHandler creates a new SensorHandler
-func NewSensorHandler(db *db.DB, temperatureService *services.TemperatureService) *SensorHandler {
+func NewSensorHandler(db SensorRepository, temperatureService *services.TemperatureService) *SensorHandler {
 	return &SensorHandler{
 		DB:                 db,
 		TemperatureService: temperatureService,
@@ -44,9 +54,9 @@ func (h *SensorHandler) RegisterRoutes(router *gin.RouterGroup) {
 
 // GetSensors handles GET /api/v1/sensors
 func (h *SensorHandler) GetSensors(c *gin.Context) {
-	sensors, err := h.DB.GetSensors(context.Background())
+	sensors, err := h.DB.GetSensors(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeRepositoryError(c, err)
 		return
 	}
 
@@ -61,6 +71,7 @@ func (h *SensorHandler) GetSensors(c *gin.Context) {
 				sensors[i].LastUpdated = tempData.Timestamp
 				log.Printf("Updated temperature data for sensor %d from external API", sensor.ID)
 			} else {
+				sensors[i].Status = "stale"
 				log.Printf("Failed to fetch temperature data for sensor %d: %v", sensor.ID, err)
 			}
 		}
@@ -77,9 +88,9 @@ func (h *SensorHandler) GetSensorByID(c *gin.Context) {
 		return
 	}
 
-	sensor, err := h.DB.GetSensorByID(context.Background(), id)
+	sensor, err := h.DB.GetSensorByID(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Sensor not found"})
+		writeRepositoryError(c, err)
 		return
 	}
 
@@ -93,6 +104,7 @@ func (h *SensorHandler) GetSensorByID(c *gin.Context) {
 			sensor.LastUpdated = tempData.Timestamp
 			log.Printf("Updated temperature data for sensor %d from external API", sensor.ID)
 		} else {
+			sensor.Status = "stale"
 			log.Printf("Failed to fetch temperature data for sensor %d: %v", sensor.ID, err)
 		}
 	}
@@ -136,9 +148,9 @@ func (h *SensorHandler) CreateSensor(c *gin.Context) {
 		return
 	}
 
-	sensor, err := h.DB.CreateSensor(context.Background(), sensorCreate)
+	sensor, err := h.DB.CreateSensor(c.Request.Context(), sensorCreate)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeRepositoryError(c, err)
 		return
 	}
 
@@ -159,9 +171,9 @@ func (h *SensorHandler) UpdateSensor(c *gin.Context) {
 		return
 	}
 
-	sensor, err := h.DB.UpdateSensor(context.Background(), id, sensorUpdate)
+	sensor, err := h.DB.UpdateSensor(c.Request.Context(), id, sensorUpdate)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeRepositoryError(c, err)
 		return
 	}
 
@@ -176,9 +188,9 @@ func (h *SensorHandler) DeleteSensor(c *gin.Context) {
 		return
 	}
 
-	err = h.DB.DeleteSensor(context.Background(), id)
+	err = h.DB.DeleteSensor(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeRepositoryError(c, err)
 		return
 	}
 
@@ -194,8 +206,8 @@ func (h *SensorHandler) UpdateSensorValue(c *gin.Context) {
 	}
 
 	var request struct {
-		Value  float64 `json:"value" binding:"required"`
-		Status string  `json:"status" binding:"required"`
+		Value  *float64 `json:"value" binding:"required"`
+		Status string   `json:"status" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -203,11 +215,22 @@ func (h *SensorHandler) UpdateSensorValue(c *gin.Context) {
 		return
 	}
 
-	err = h.DB.UpdateSensorValue(context.Background(), id, request.Value, request.Status)
+	err = h.DB.UpdateSensorValue(c.Request.Context(), id, *request.Value, request.Status)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeRepositoryError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Sensor value updated successfully"})
+}
+
+func writeRepositoryError(c *gin.Context, err error) {
+	status := http.StatusBadGateway
+	var upstream *services.UpstreamError
+	if errors.As(err, &upstream) && upstream.StatusCode >= 400 && upstream.StatusCode < 500 {
+		status = upstream.StatusCode
+	} else if errors.Is(err, pgx.ErrNoRows) {
+		status = http.StatusNotFound
+	}
+	c.JSON(status, gin.H{"error": err.Error()})
 }

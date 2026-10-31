@@ -34,10 +34,10 @@ type SensorCreate struct {
 
 // SensorUpdate represents the data that can be updated for a sensor
 type SensorUpdate struct {
-	Name     string     `json:"name"`
-	Type     SensorType `json:"type"`
-	Location string     `json:"location"`
-	Value    *float64   `json:"value"`
-	Unit     string     `json:"unit"`
-	Status   string     `json:"status"`
+	Name     string     `json:"name,omitempty"`
+	Type     SensorType `json:"type,omitempty"`
+	Location string     `json:"location,omitempty"`
+	Value    *float64   `json:"value,omitempty"`
+	Unit     string     `json:"unit,omitempty"`
+	Status   string     `json:"status,omitempty"`
 }
