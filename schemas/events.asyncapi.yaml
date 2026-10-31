@@ -1,0 +1,144 @@
+asyncapi: 2.6.0
+info:
+  title: Тёплый дом — события целевой системы
+  version: 1.0.0
+  description: >-
+    Перспектива документа — производители событий (сервис устройств и видеонаблюдение).
+    Topic exchange warmhouse.events. У телеметрии, автоматизации и каждого функционального
+    сервиса своя durable-очередь с привязкой к нужным routing keys. Доставка at-least-once,
+    подтверждение после сохранения, удаление дублей по event_id. Ошибки обрабатываются
+    ограниченными повторами и dead-letter-очередью. В MVP используется REST вместо AMQP.
+servers:
+  rabbitmq:
+    url: rabbitmq:5672
+    protocol: amqp
+    description: Внутренняя сеть платформы; вне локального стенда используется TLS.
+defaultContentType: application/json
+channels:
+  measurement.recorded:
+    description: Сервис устройств публикует; телеметрия сохраняет, автоматизация проверяет условия.
+    publish:
+      operationId: publishMeasurement
+      message: {$ref: '#/components/messages/MeasurementRecorded'}
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: {name: warmhouse.events, type: topic, durable: true}
+        bindingVersion: 0.2.0
+  device.state.changed:
+    description: Устройства публикуют подтверждения; функциональный сервис фильтрует по device_type, автоматизация и телеметрия также получают события.
+    publish:
+      operationId: publishDeviceState
+      message: {$ref: '#/components/messages/DeviceStateChanged'}
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: {name: warmhouse.events, type: topic, durable: true}
+        bindingVersion: 0.2.0
+  device.registered:
+    description: Сервис устройств публикует регистрацию устройства.
+    publish:
+      operationId: publishDeviceRegistered
+      message: {$ref: '#/components/messages/DeviceRegistered'}
+  camera.state.changed:
+    description: Видеонаблюдение публикует; телеметрия и автоматизация получают состояние камеры, без видеоданных.
+    publish:
+      operationId: publishCameraState
+      message: {$ref: '#/components/messages/CameraStateChanged'}
+components:
+  schemas:
+    Envelope:
+      type: object
+      required: [event_id, schema_version, home_id, device_id, occurred_at]
+      properties:
+        event_id: {type: string, format: uuid}
+        schema_version: {type: integer, enum: [1]}
+        home_id: {type: integer, minimum: 1}
+        device_id: {type: integer, minimum: 1}
+        occurred_at: {type: string, format: date-time}
+        command_id: {type: string, format: uuid, description: Присутствует при подтверждении команды.}
+    MeasurementEvent:
+      allOf:
+        - {$ref: '#/components/schemas/Envelope'}
+        - type: object
+          required: [metric, value, unit, status]
+          properties:
+            metric: {type: string, examples: [temperature]}
+            value: {type: number}
+            unit: {type: string, examples: ['°C']}
+            status: {type: string}
+    StateEvent:
+      allOf:
+        - {$ref: '#/components/schemas/Envelope'}
+        - type: object
+          required: [device_type, state, version]
+          properties:
+            device_type: {type: string}
+            state: {type: object, additionalProperties: true}
+            version: {type: integer, minimum: 0, description: Монотонная версия для отбрасывания устаревших состояний.}
+    RegistrationEvent:
+      allOf:
+        - {$ref: '#/components/schemas/Envelope'}
+        - type: object
+          required: [device_type, capabilities]
+          properties:
+            device_type: {type: string}
+            capabilities: {type: array, items: {type: string}}
+  messages:
+    MeasurementRecorded:
+      name: MeasurementRecorded
+      payload: {$ref: '#/components/schemas/MeasurementEvent'}
+      examples:
+        - name: kitchenTemperature
+          payload:
+            event_id: e1a0616f-e69a-40fb-b352-6afdb4b46e81
+            schema_version: 1
+            home_id: 1
+            device_id: 1
+            occurred_at: '2026-11-01T10:00:00Z'
+            metric: temperature
+            value: 22.5
+            unit: '°C'
+            status: active
+    DeviceStateChanged:
+      name: DeviceStateChanged
+      payload: {$ref: '#/components/schemas/StateEvent'}
+      examples:
+        - name: heatingEnabled
+          payload:
+            event_id: c708050b-9f89-4224-9b13-f7fef3b7b668
+            schema_version: 1
+            home_id: 1
+            device_id: 2
+            occurred_at: '2026-11-01T10:00:00Z'
+            command_id: 15d19abb-523b-4398-9785-78f8700e6de1
+            device_type: heating
+            state: {enabled: true}
+            version: 1
+    DeviceRegistered:
+      name: DeviceRegistered
+      payload: {$ref: '#/components/schemas/RegistrationEvent'}
+      examples:
+        - name: sensorPaired
+          payload:
+            event_id: e6f67782-dcc5-48be-8e90-a4eb57a31d37
+            schema_version: 1
+            home_id: 1
+            device_id: 1
+            occurred_at: '2026-11-01T10:00:00Z'
+            device_type: temperature
+            capabilities: [read_temperature]
+    CameraStateChanged:
+      name: CameraStateChanged
+      payload: {$ref: '#/components/schemas/StateEvent'}
+      examples:
+        - name: cameraOnline
+          payload:
+            event_id: 773e1ec9-d889-4f5e-acdf-f07fb1bc59ae
+            schema_version: 1
+            home_id: 1
+            device_id: 3
+            occurred_at: '2026-11-01T10:00:00Z'
+            device_type: camera
+            state: {online: true}
+            version: 1

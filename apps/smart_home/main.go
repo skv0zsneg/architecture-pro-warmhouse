@@ -46,7 +46,12 @@ func main() {
 	apiRoutes := router.Group("/api/v1")
 
 	// Register sensor routes
-	sensorHandler := handlers.NewSensorHandler(database, temperatureService)
+	var sensorRepository handlers.SensorRepository = database
+	if devicesURL := os.Getenv("DEVICES_API_URL"); devicesURL != "" {
+		sensorRepository = services.NewDeviceRepository(devicesURL)
+		log.Printf("Sensor registry delegated to %s", devicesURL)
+	}
+	sensorHandler := handlers.NewSensorHandler(sensorRepository, temperatureService)
 	sensorHandler.RegisterRoutes(apiRoutes)
 
 	// Start server

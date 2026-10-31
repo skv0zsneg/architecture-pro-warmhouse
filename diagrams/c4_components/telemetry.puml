@@ -1,0 +1,32 @@
+@startuml telemetry
+!include <C4/C4_Component>
+title Тёплый дом — телеметрия (To-Be и переходный MVP)
+LAYOUT_TOP_DOWN()
+
+Container_Ext(client, "API Gateway / монолит", "HTTP API", "История, последние показания и совместимое чтение температуры.")
+ContainerQueue(events, "Брокер событий (To-Be)", "RabbitMQ", "Показания и состояния.")
+Container_Ext(devices, "Управление устройствами", "Python", "Зарегистрированные устройства.")
+System_Ext(simulator, "Источник температуры (MVP)", "FastAPI", "Эмулятор датчиков.")
+Container_Boundary(service, "Телеметрия") {
+    Component(api, "Telemetry API", "Python, FastAPI", "История, последнее значение и REST-приём измерений.")
+    Component(consumer, "MeasurementConsumer (To-Be)", "Python, AMQP", "Приём событий вместо опроса устройств.")
+    Component(collector, "Collector (MVP)", "Python, asyncio", "Фоновый опрос зарегистрированных датчиков.")
+    Component(serviceComponent, "MeasurementService", "Python", "Проверка принадлежности, получение и сохранение измерений.")
+    Component(gateways, "DeviceGateway / TemperatureGateway", "Python, HTTPX", "HTTP-клиенты реестра и источника температуры для MVP.")
+    Component(repository, "MeasurementRepository", "Python, psycopg", "Идемпотентная запись и чтение истории.")
+}
+ContainerDb(db, "БД телеметрии", "PostgreSQL (MVP), TimescaleDB (To-Be)", "История измерений.")
+
+Rel(client, api, "Читает / передаёт показания", "HTTPS, REST/JSON")
+Rel(events, consumer, "Доставляет события", "AMQP")
+Rel(consumer, serviceComponent, "Принимает измерение")
+Rel(api, serviceComponent, "Принимает / получает свежее измерение")
+Rel(api, repository, "Читает историю")
+Rel(collector, gateways, "Получает список датчиков")
+Rel(collector, serviceComponent, "Собирает показания")
+Rel(serviceComponent, gateways, "Получает устройство и температуру")
+Rel(gateways, devices, "Читает реестр", "HTTP, REST/JSON")
+Rel(gateways, simulator, "Получает показание", "HTTP, REST/JSON")
+Rel(serviceComponent, repository, "Сохраняет измерение")
+Rel(repository, db, "Читает и записывает", "SQL")
+@enduml

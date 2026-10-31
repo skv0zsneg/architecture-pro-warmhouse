@@ -1,0 +1,61 @@
+@startuml measurement_service
+title Тёплый дом — C4 Code: компонент MeasurementService (Python MVP)
+skinparam classAttributeIconSize 0
+hide empty members
+
+class MeasurementService {
+  - repository: MeasurementStore
+  - source: TemperatureGateway
+  + capture(device: dict): Measurement
+  + accept(measurement: Measurement, device: dict): Measurement
+}
+interface MeasurementStore <<Protocol>> {
+  + save(measurement: Measurement): Measurement
+  + history(device_id: int, limit: int): list[Measurement]
+  + ping(): None
+}
+class MeasurementRepository {
+  - database_url: str
+  + save(measurement: Measurement): Measurement
+  + history(device_id: int, limit: int): list[Measurement]
+  + ping(): None
+}
+class TemperatureGateway {
+  - client: httpx.Client
+  - base_url: str
+  + read(device: dict): Reading
+}
+class Reading <<Pydantic model>> {
+  + value: float
+  + unit: str
+  + timestamp: AwareDatetime
+  + location: str
+  + status: str
+  + sensor_id: str
+  + sensor_type: str
+  + description: str
+}
+class Measurement <<Pydantic model>> {
+  + id: UUID
+  + device_id: int
+  + home_id: int
+}
+class Collector {
+  - devices: DeviceGateway
+  - measurements: MeasurementService
+  + collect(): None
+}
+class DeviceGateway {
+  + get(device_id: int): dict
+  + list_temperature_devices(): list[dict]
+}
+
+MeasurementService --> MeasurementStore : сохраняет
+MeasurementRepository ..|> MeasurementStore
+MeasurementService --> TemperatureGateway : получает показание
+TemperatureGateway ..> Reading : создаёт
+MeasurementService ..> Measurement : создаёт / проверяет
+Reading <|-- Measurement
+Collector --> MeasurementService : capture
+Collector --> DeviceGateway : реестр
+@enduml

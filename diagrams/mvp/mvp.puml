@@ -1,0 +1,26 @@
+@startuml mvp
+!include <C4/C4_Container>
+title Тёплый дом — реализованный переходный MVP (задания 5 и 6)
+LAYOUT_TOP_DOWN()
+
+Person(reviewer, "Пользователь / ревьюер", "Postman или HTTP-клиент.")
+System_Boundary(system, "Docker Compose") {
+    Container(monolith, "Монолит :8080", "Go, Gin", "Старый API датчиков, адаптер нового реестра.")
+    Container(devices, "Устройства :8082", "Python, FastAPI", "CRUD устройств. Дом 1 — демонстрационный.")
+    Container(telemetry, "Телеметрия :8083", "Python, FastAPI", "Фоновый сбор, история и совместимый API температуры.")
+    Container(simulator, "temperature-api :8081", "Python, FastAPI", "Случайные показания датчиков.")
+    ContainerDb(legacyDb, "public.sensors", "PostgreSQL", "Исходный реестр для режима без DEVICES_API_URL.")
+    ContainerDb(devicesDb, "devices.*", "PostgreSQL", "Дома и устройства.")
+    ContainerDb(telemetryDb, "telemetry.*", "PostgreSQL", "История показаний.")
+}
+Rel(reviewer, monolith, "Старый API", "HTTP :8080")
+Rel(reviewer, devices, "Новый API / Swagger", "HTTP :8082")
+Rel(reviewer, telemetry, "История / Swagger", "HTTP :8083")
+Rel(monolith, devices, "CRUD через адаптер", "HTTP, REST/JSON")
+Rel(monolith, telemetry, "Свежее показание для старого API", "HTTP, REST/JSON")
+Rel(monolith, legacyDb, "Резервный режим до переключения", "SQL")
+Rel(telemetry, devices, "Реестр для фонового опроса", "HTTP, REST/JSON")
+Rel(telemetry, simulator, "Запрашивает температуру", "HTTP, REST/JSON")
+Rel(devices, devicesDb, "Читает и записывает", "SQL")
+Rel(telemetry, telemetryDb, "Сохраняет и читает историю", "SQL")
+@enduml

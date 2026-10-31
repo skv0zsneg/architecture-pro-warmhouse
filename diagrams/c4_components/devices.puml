@@ -1,0 +1,32 @@
+@startuml devices
+!include <C4/C4_Component>
+title Тёплый дом — управление устройствами (To-Be)
+LAYOUT_TOP_DOWN()
+
+Container_Ext(client, "API Gateway / функциональные сервисы", "HTTPS", "Регистрация, настройка и команды устройств.")
+Container_Ext(domains, "Отопление, освещение, ворота, видео", "Go", "Выполняют действия сценариев.")
+System_Ext(equipment, "Устройства партнёров", "Датчики и исполнительные модули.")
+ContainerQueue(events, "Брокер событий", "RabbitMQ", "Показания и состояния устройств.")
+Container_Boundary(service, "Управление устройствами") {
+    Component(api, "Device API", "Python, FastAPI", "API домов, устройств, команд и сценариев. Проверка доступа.")
+    Component(registry, "DeviceService", "Python", "Привязка к дому, конфигурация и проверка возможностей.")
+    Component(adapters, "ProtocolAdapters", "Python", "Доставка команд, приём показаний и опрос устройств.")
+    Component(automation, "ScenarioEngine", "Python", "Внутренний модуль: условия, расписания и действия сценариев.")
+    Component(messaging, "DeviceEventAdapter", "Python, AMQP", "Публикация событий и доставка триггеров автоматизации.")
+    Component(repository, "DeviceRepository", "Python, psycopg", "Реестр домов и устройств, конфигурация и правила.")
+}
+ContainerDb(db, "БД устройств и сценариев", "PostgreSQL", "Данные реестра и автоматизации.")
+
+Rel(client, api, "Вызывает API", "HTTPS, REST/JSON")
+Rel(api, registry, "Регистрирует / настраивает / командует")
+Rel(api, automation, "Управляет сценариями")
+Rel(registry, repository, "Читает и сохраняет")
+Rel(registry, adapters, "Передаёт допустимую команду")
+BiRel(adapters, equipment, "Команды / показания", "HTTPS, протокол устройства")
+Rel(adapters, messaging, "Показания и подтверждения")
+BiRel(messaging, events, "Публикация / получение событий", "AMQP")
+Rel(messaging, automation, "Передаёт триггер")
+Rel(automation, repository, "Читает правила, сохраняет выполнение")
+Rel(automation, domains, "Выполняет действия с правами автора", "HTTPS, REST/JSON")
+Rel(repository, db, "Читает и записывает", "SQL")
+@enduml
