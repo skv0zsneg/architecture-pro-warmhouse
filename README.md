@@ -66,6 +66,7 @@
 Контекстная карта в данном случае может быть следующей:
 
 ![Context Map](/diagrams/context_and_domains/context_and_domains.png)
+*[Ссылка на картинку](/diagrams/context_and_domains/context_and_domains.png)*
 
 ### **4. Проблемы монолитного решения**
 
